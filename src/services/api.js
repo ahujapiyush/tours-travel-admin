@@ -52,6 +52,12 @@ export const carsAPI = {
   updateCar: (id, data) => api.put(`/cars/${id}`, data),
   deleteCar: (id) => api.delete(`/cars/${id}`),
   updateLocation: (id, data) => api.put(`/cars/${id}/location`, data),
+  uploadImageForCar: (id, formData) => api.post(`/cars/${id}/images`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  uploadImage: (formData) => api.post('/cars/upload-image', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
   getCategories: () => api.get('/cars/categories'),
 };
 

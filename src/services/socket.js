@@ -5,6 +5,8 @@
 import { API_BASE_URL } from '../constants/config';
 import { Platform } from 'react-native';
 
+const API_ROOT = API_BASE_URL.endsWith('/api') ? API_BASE_URL : `${API_BASE_URL}/api`;
+
 let SecureStore;
 if (Platform.OS !== 'web') {
   SecureStore = require('expo-secure-store');
@@ -21,7 +23,7 @@ const getToken = async () => {
 
 const apiFetch = async (path) => {
   const token = await getToken();
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+  const res = await fetch(`${API_ROOT}${path}`, {
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),

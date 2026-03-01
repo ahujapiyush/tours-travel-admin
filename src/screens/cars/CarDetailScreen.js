@@ -20,7 +20,7 @@ export default function CarDetailScreen({ navigation, route }) {
   const fetchCar = async () => {
     try {
       const { data } = await carsAPI.getCarById(carId);
-      setCar(data);
+      setCar(data?.car || data);
     } catch (err) {
       showAlert('Error', 'Failed to load car details');
       navigation.goBack();

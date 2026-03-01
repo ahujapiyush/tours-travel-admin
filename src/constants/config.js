@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 
 // Use localhost for iOS simulator, 10.0.2.2 for Android emulator
 const getBaseUrl = () => {
-  return 'https://backend-psi-two-85.vercel.app';
+  return 'https://tours-travel-backend-eosin.vercel.app';
   // For local dev, comment the above and use:
   // if (Platform.OS === 'android') return 'http://10.0.2.2:5001';
   // return 'http://localhost:5001';

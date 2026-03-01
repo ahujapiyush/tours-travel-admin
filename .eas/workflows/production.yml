@@ -1,0 +1,25 @@
+name: Admin App — Build & Deploy Production
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build_android:
+    name: Build Android APK
+    type: build
+    params:
+      platform: android
+      profile: production
+
+  build_ios:
+    name: Build iOS IPA
+    type: build
+    params:
+      platform: ios
+      profile: production
+
+  deploy_web:
+    name: Deploy Web to Production
+    type: deploy
+    params:
+      prod: true

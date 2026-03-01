@@ -1,22 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
-  ActivityIndicator, Platform, KeyboardAvoidingView,
+  ActivityIndicator, Platform, KeyboardAvoidingView, Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { showAlert } from '../../utils/alert';
 import { COLORS, SIZES, SHADOWS } from '../../constants/theme';
+import { API_BASE_URL } from '../../constants/config';
 import { carsAPI, locationsAPI } from '../../services/api';
 
 const FUEL_TYPES = ['Petrol', 'Diesel', 'CNG', 'Electric', 'Hybrid'];
 const TRANSMISSION_TYPES = ['Manual', 'Automatic'];
-const CAR_STATUSES = ['active', 'maintenance', 'inactive'];
+const CAR_STATUSES = ['available', 'booked', 'maintenance', 'inactive'];
+const ASSET_BASE_URL = API_BASE_URL.endsWith('/api') ? API_BASE_URL.replace('/api', '') : API_BASE_URL;
 
 export default function AddCarScreen({ navigation, route }) {
-  const editCar = route.params?.car;
-  const isEdit = !!editCar;
+  const editCarRaw = route.params?.car;
+  const editCar = editCarRaw?.car || editCarRaw || null;
+  const editCarId = editCar?.id || route.params?.carId || route.params?.id || null;
+  const isEdit = !!editCarId;
 
   const [loading, setLoading] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadedImages, setUploadedImages] = useState(
+    Array.isArray(editCar?.images)
+      ? editCar.images.filter((url) => typeof url === 'string' && /\/assets\/car\/\d+\/\d+$/.test(url))
+      : []
+  );
   const [states, setStates] = useState([]);
   const [cities, setCities] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -37,7 +47,13 @@ export default function AddCarScreen({ navigation, route }) {
     base_price: editCar?.base_price?.toString() || '',
     ac: editCar?.ac !== false,
     description: editCar?.description || '',
-    features: editCar?.features?.join(', ') || '',
+    features: Array.isArray(editCar?.features)
+      ? editCar.features.join(', ')
+      : (typeof editCar?.features === 'string' ? editCar.features : ''),
+    image_url: editCar?.image_url || '',
+    images: Array.isArray(editCar?.images)
+      ? editCar.images.filter((url) => typeof url === 'string' && !/\/assets\/car\/\d+\/\d+$/.test(url)).join(', ')
+      : '',
     status: editCar?.status || 'active',
   });
 
@@ -73,8 +89,48 @@ export default function AddCarScreen({ navigation, route }) {
 
   const updateForm = (key, value) => setForm(prev => ({ ...prev, [key]: value }));
 
+  const handleUploadImage = async () => {
+    if (Platform.OS !== 'web') {
+      showAlert('Not Supported', 'File input upload is available on web admin.');
+      return;
+    }
+    if (!isEdit || !editCarId) {
+      showAlert('Save Car First', 'Create the car first, then upload images in edit mode to get a permanent URL.');
+      return;
+    }
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+
+      try {
+        setUploadingImage(true);
+        const formData = new FormData();
+        formData.append('image', file);
+        const { data } = await carsAPI.uploadImageForCar(editCarId, formData);
+        if (data?.image_url) {
+          setUploadedImages(prev => [data.image_url, ...prev.filter(u => u !== data.image_url)].slice(0, 10));
+          if (!form.image_url) {
+            updateForm('image_url', data.image_url);
+          }
+          showAlert('Success', 'Image uploaded successfully');
+        } else {
+          showAlert('Error', 'Upload completed but no image URL returned');
+        }
+      } catch (err) {
+        showAlert('Error', err.response?.data?.error || 'Image upload failed');
+      } finally {
+        setUploadingImage(false);
+      }
+    };
+    input.click();
+  };
+
   const handleSubmit = async () => {
-    if (!form.name || !form.brand || !form.registration_number || !form.city_id ||
+    if (!form.name || !form.brand || !form.registration_number || !form.state_id || !form.city_id ||
         !form.price_per_km || !form.base_price || !form.category_id) {
       showAlert('Validation', 'Please fill all required fields');
       return;
@@ -82,20 +138,31 @@ export default function AddCarScreen({ navigation, route }) {
 
     setLoading(true);
     try {
+      const manualImages = form.images
+        ? form.images.split(',').map(i => i.trim()).filter(Boolean)
+        : [];
+      const allImages = [...uploadedImages, ...manualImages].filter(Boolean);
+
       const payload = {
         ...form,
         year: parseInt(form.year),
         seats: parseInt(form.seats),
+        state_id: parseInt(form.state_id),
         category_id: parseInt(form.category_id),
         city_id: parseInt(form.city_id),
         price_per_km: parseFloat(form.price_per_km),
         base_price: parseFloat(form.base_price),
         features: form.features ? form.features.split(',').map(f => f.trim()).filter(Boolean) : [],
+        image_url: form.image_url?.trim() || null,
+        images: allImages,
       };
-      delete payload.state_id;
 
       if (isEdit) {
-        await carsAPI.updateCar(editCar.id, payload);
+        if (!editCarId) {
+          showAlert('Error', 'Car ID is missing. Please reopen edit screen.');
+          return;
+        }
+        await carsAPI.updateCar(editCarId, payload);
         showAlert('Success', 'Car updated successfully');
       } else {
         await carsAPI.createCar(payload);
@@ -239,6 +306,56 @@ export default function AddCarScreen({ navigation, route }) {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Additional</Text>
           <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Primary Image URL</Text>
+            <TextInput
+              style={styles.input}
+              value={form.image_url}
+              onChangeText={v => updateForm('image_url', v)}
+              placeholder={`${ASSET_BASE_URL}/assets/cars/sedan.svg`}
+              placeholderTextColor={COLORS.textLight}
+              autoCapitalize="none"
+            />
+            {uploadedImages.length > 0 && (
+              <>
+                <Text style={styles.helperText}>{uploadedImages.length} uploaded image(s) attached to this car</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.previewRow}>
+                  {uploadedImages.map((uri, idx) => (
+                    <Image key={`${idx}-${uri.slice(0, 24)}`} source={{ uri }} style={styles.previewImage} resizeMode="cover" />
+                  ))}
+                </ScrollView>
+              </>
+            )}
+            <TouchableOpacity
+              style={[styles.uploadBtn, uploadingImage && { opacity: 0.7 }]}
+              onPress={handleUploadImage}
+              disabled={uploadingImage || !isEdit}
+              activeOpacity={0.8}
+            >
+              {uploadingImage ? (
+                <ActivityIndicator color={COLORS.textWhite} size="small" />
+              ) : (
+                <>
+                  <Ionicons name="cloud-upload" size={16} color={COLORS.textWhite} />
+                  <Text style={styles.uploadBtnText}>Upload from device</Text>
+                </>
+              )}
+            </TouchableOpacity>
+            {!isEdit && (
+              <Text style={styles.helperText}>Save this car first, then open Edit to upload and get permanent image URLs.</Text>
+            )}
+          </View>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>More Image URLs (comma separated)</Text>
+            <TextInput
+              style={styles.input}
+              value={form.images}
+              onChangeText={v => updateForm('images', v)}
+              placeholder="https://.../img1.jpg, https://.../img2.jpg"
+              placeholderTextColor={COLORS.textLight}
+              autoCapitalize="none"
+            />
+          </View>
+          <View style={styles.fieldGroup}>
             <Text style={styles.label}>Description</Text>
             <TextInput style={[styles.input, styles.textArea]} value={form.description} onChangeText={v => updateForm('description', v)} multiline numberOfLines={3} placeholder="Describe the car..." placeholderTextColor={COLORS.textLight} />
           </View>
@@ -287,6 +404,29 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
   chipText: { fontSize: SIZES.sm, color: COLORS.textSecondary, fontWeight: '500' },
   chipTextActive: { color: COLORS.textWhite },
+  helperText: { fontSize: SIZES.xs, color: COLORS.textLight, marginTop: 8, marginBottom: 6 },
+  previewRow: { marginBottom: 8 },
+  previewImage: {
+    width: 76,
+    height: 56,
+    borderRadius: SIZES.radius,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+    backgroundColor: COLORS.background,
+  },
+  uploadBtn: {
+    marginTop: 10,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.primary,
+    borderRadius: SIZES.radius,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  uploadBtnText: { color: COLORS.textWhite, fontSize: SIZES.sm, fontWeight: '600' },
   toggleBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.background,
     borderRadius: SIZES.radius, padding: 12, borderWidth: 1, borderColor: COLORS.divider,

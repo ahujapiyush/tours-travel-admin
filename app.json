@@ -27,11 +27,18 @@
     },
     "web": {
       "favicon": "./assets/favicon.png",
-      "bundler": "metro"
+      "bundler": "metro",
+      "output": "single"
     },
     "plugins": [
       "expo-secure-store",
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "78a76a20-ad28-4c9f-9089-9f7f9b176663"
+      }
+    },
+    "owner": "ahujapiyush"
   }
 }

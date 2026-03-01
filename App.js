@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -94,6 +94,23 @@ const SCREEN_MAP = {
   Notifications: NotificationsScreen,
 };
 
+const SCREEN_PATHS = {
+  Dashboard: '/dashboard',
+  Cars: '/cars',
+  Bookings: '/bookings',
+  Customers: '/customers',
+  More: '/settings',
+  Drivers: '/drivers',
+  LiveMap: '/live-map',
+  Reports: '/reports',
+  Notifications: '/notifications',
+};
+
+const PATH_TO_SCREEN = Object.entries(SCREEN_PATHS).reduce((acc, [screen, path]) => {
+  acc[path] = screen;
+  return acc;
+}, {});
+
 function WebLayout() {
   const [activeScreen, setActiveScreen] = useState('Dashboard');
   const [screenStack, setScreenStack] = useState([]);
@@ -104,6 +121,12 @@ function WebLayout() {
     if (SCREEN_MAP[screen]) {
       setActiveScreen(screen);
       setScreenStack([]);
+      if (typeof window !== 'undefined') {
+        const path = SCREEN_PATHS[screen] || '/dashboard';
+        if (window.location.pathname !== path) {
+          window.history.pushState({}, '', path);
+        }
+      }
     } else {
       // Push to detail stack
       setScreenStack(prev => [...prev, { screen, params }]);
@@ -118,6 +141,23 @@ function WebLayout() {
       return prev.slice(0, -1);
     });
   };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const syncFromPath = () => {
+      const path = window.location.pathname;
+      const matchedScreen = PATH_TO_SCREEN[path];
+      if (matchedScreen && SCREEN_MAP[matchedScreen]) {
+        setActiveScreen(matchedScreen);
+        setScreenStack([]);
+      }
+    };
+
+    syncFromPath();
+    window.addEventListener('popstate', syncFromPath);
+    return () => window.removeEventListener('popstate', syncFromPath);
+  }, []);
 
   // Navigation object for screen components
   const navigation = {
