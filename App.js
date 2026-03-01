@@ -130,6 +130,19 @@ function WebLayout() {
     } else {
       // Push to detail stack
       setScreenStack(prev => [...prev, { screen, params }]);
+      // Update URL for detail screens
+      if (typeof window !== 'undefined') {
+        const detailPaths = {
+          BookingDetail: `/bookings/${params?.id || params?.bookingId || ''}`,
+          CarDetail: `/cars/${params?.carId || params?.id || ''}`,
+          AddCar: '/cars/new',
+          AddBooking: '/bookings/new',
+          AddCustomer: '/customers/new',
+          AddDriver: '/drivers/new',
+        };
+        const path = detailPaths[screen];
+        if (path) window.history.pushState({ screen, params }, '', path);
+      }
     }
   };
 
@@ -140,6 +153,11 @@ function WebLayout() {
       if (top?.screen?.startsWith('Add')) setRefreshKey(k => k + 1);
       return prev.slice(0, -1);
     });
+    // Push the parent screen URL
+    if (typeof window !== 'undefined') {
+      const path = SCREEN_PATHS[activeScreen] || '/dashboard';
+      window.history.pushState({}, '', path);
+    }
   };
 
   useEffect(() => {
@@ -147,6 +165,43 @@ function WebLayout() {
 
     const syncFromPath = () => {
       const path = window.location.pathname;
+
+      // Check detail screen routes first
+      const bookingMatch = path.match(/^\/bookings\/([\w-]+)$/);
+      const carMatch = path.match(/^\/cars\/([\w-]+)$/);
+
+      if (bookingMatch && bookingMatch[1] !== 'new') {
+        setActiveScreen('Bookings');
+        setScreenStack([{ screen: 'BookingDetail', params: { id: bookingMatch[1] } }]);
+        return;
+      }
+      if (bookingMatch && bookingMatch[1] === 'new') {
+        setActiveScreen('Bookings');
+        setScreenStack([{ screen: 'AddBooking', params: {} }]);
+        return;
+      }
+      if (carMatch && carMatch[1] !== 'new') {
+        setActiveScreen('Cars');
+        setScreenStack([{ screen: 'CarDetail', params: { carId: carMatch[1] } }]);
+        return;
+      }
+      if (carMatch && carMatch[1] === 'new') {
+        setActiveScreen('Cars');
+        setScreenStack([{ screen: 'AddCar', params: {} }]);
+        return;
+      }
+      if (path === '/customers/new') {
+        setActiveScreen('Customers');
+        setScreenStack([{ screen: 'AddCustomer', params: {} }]);
+        return;
+      }
+      if (path === '/drivers/new') {
+        setActiveScreen('Drivers');
+        setScreenStack([{ screen: 'AddDriver', params: {} }]);
+        return;
+      }
+
+      // Main nav screens
       const matchedScreen = PATH_TO_SCREEN[path];
       if (matchedScreen && SCREEN_MAP[matchedScreen]) {
         setActiveScreen(matchedScreen);

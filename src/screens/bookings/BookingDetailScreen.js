@@ -10,7 +10,7 @@ import { BOOKING_STATUSES } from '../../constants/config';
 import { bookingsAPI } from '../../services/api';
 import socketService from '../../services/socket';
 
-const STATUS_FLOW = ['pending', 'confirmed', 'assigned', 'in_progress', 'completed'];
+const STATUS_FLOW = ['pending', 'confirmed', 'driver_assigned', 'in_progress', 'completed'];
 
 export default function BookingDetailScreen({ navigation, route }) {
   const bookingId = route.params?.bookingId || route.params?.id;
@@ -167,6 +167,12 @@ export default function BookingDetailScreen({ navigation, route }) {
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Car & Driver</Text>
         <DetailRow icon="car-sport" label="Car" value={booking.car_name ? `${booking.car_brand || ''} ${booking.car_name}`.trim() : `Car #${booking.car_id}`} />
+        {booking.car_model && (
+          <DetailRow icon="information-circle" label="Model" value={booking.car_model} />
+        )}
+        {booking.registration_number && (
+          <DetailRow icon="document" label="Reg. Number" value={booking.registration_number} />
+        )}
         {booking.driver_name && (
           <DetailRow icon="person-circle" label="Driver" value={booking.driver_name} />
         )}
@@ -202,10 +208,18 @@ export default function BookingDetailScreen({ navigation, route }) {
           <Text style={styles.totalLabel}>Total Amount</Text>
           <Text style={styles.totalValue}>₹{parseFloat(booking.total_amount || 0).toLocaleString()}</Text>
         </View>
+        <DetailRow icon="card" label="Payment Method" value={(booking.payment_method || 'cash').toUpperCase()} />
         <DetailRow icon="card" label="Payment Status" value={booking.payment_status || 'pending'} />
         {booking.coupon_code && (
           <DetailRow icon="gift" label="Coupon" value={booking.coupon_code} />
         )}
+      </View>
+
+      {/* Extra Info */}
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Additional Info</Text>
+        <DetailRow icon="chatbubble" label="Notes" value={booking.notes || 'None'} />
+        <DetailRow icon="time" label="Booked On" value={booking.created_at ? new Date(booking.created_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'} />
       </View>
 
       {/* Tracking */}
