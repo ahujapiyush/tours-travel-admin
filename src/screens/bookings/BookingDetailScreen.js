@@ -15,6 +15,7 @@ const STATUS_FLOW = ['pending', 'confirmed', 'assigned', 'in_progress', 'complet
 export default function BookingDetailScreen({ navigation, route }) {
   const bookingId = route.params?.bookingId || route.params?.id;
   const [booking, setBooking] = useState(null);
+  const [tracking, setTracking] = useState([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
 
@@ -37,7 +38,8 @@ export default function BookingDetailScreen({ navigation, route }) {
   const fetchBooking = async () => {
     try {
       const { data } = await bookingsAPI.getBookingById(bookingId);
-      setBooking(data);
+      setBooking(data.booking || data);
+      setTracking(data.tracking || []);
     } catch (err) {
       showAlert('Error', 'Failed to load booking');
       navigation.goBack();
@@ -123,7 +125,7 @@ export default function BookingDetailScreen({ navigation, route }) {
         <View style={[styles.statusIconWrap, { backgroundColor: statusInfo.color + '30' }]}>
           <Ionicons name="document-text" size={28} color={statusInfo.color} />
         </View>
-        <Text style={styles.bookingId}>Booking #{booking.id}</Text>
+        <Text style={styles.bookingId}>#{booking.booking_number || booking.id}</Text>
         <View style={[styles.statusBadge, { backgroundColor: statusInfo.color + '25' }]}>
           <Text style={[styles.statusText, { color: statusInfo.color }]}>
             {statusInfo.label}
@@ -156,7 +158,7 @@ export default function BookingDetailScreen({ navigation, route }) {
       {/* Customer Card */}
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Customer</Text>
-        <DetailRow icon="person" label="Name" value={booking.customer_name || `User #${booking.user_id}`} />
+        <DetailRow icon="person" label="Name" value={booking.customer_name || `User #${booking.customer_id}`} />
         <DetailRow icon="call" label="Phone" value={booking.customer_phone || '-'} />
         <DetailRow icon="mail" label="Email" value={booking.customer_email || '-'} />
       </View>
@@ -164,7 +166,7 @@ export default function BookingDetailScreen({ navigation, route }) {
       {/* Car & Driver Card */}
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Car & Driver</Text>
-        <DetailRow icon="car-sport" label="Car" value={booking.car_name || `Car #${booking.car_id}`} />
+        <DetailRow icon="car-sport" label="Car" value={booking.car_name ? `${booking.car_brand || ''} ${booking.car_name}`.trim() : `Car #${booking.car_id}`} />
         {booking.driver_name && (
           <DetailRow icon="person-circle" label="Driver" value={booking.driver_name} />
         )}
@@ -176,29 +178,29 @@ export default function BookingDetailScreen({ navigation, route }) {
       {/* Booking Info */}
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Booking Details</Text>
-        <DetailRow icon="calendar" label="Pickup Date" value={booking.pickup_date ? new Date(booking.pickup_date).toLocaleDateString() : '-'} />
-        <DetailRow icon="time" label="Pickup Time" value={booking.pickup_time || '-'} />
-        <DetailRow icon="calendar" label="Return Date" value={booking.return_date ? new Date(booking.return_date).toLocaleDateString() : '-'} />
-        <DetailRow icon="navigate" label="Distance" value={booking.estimated_distance ? `${booking.estimated_distance} km` : '-'} />
-        <DetailRow icon="hourglass" label="Duration" value={booking.estimated_duration || '-'} />
+        <DetailRow icon="calendar" label="Pickup Date" value={booking.pickup_time ? new Date(booking.pickup_time).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'} />
+        <DetailRow icon="time" label="Pickup Time" value={booking.pickup_time ? new Date(booking.pickup_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '-'} />
+        <DetailRow icon="calendar" label="Return Date" value={booking.return_date ? new Date(booking.return_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'} />
+        <DetailRow icon="navigate" label="Distance" value={booking.distance_km ? `${booking.distance_km} km` : '-'} />
+        <DetailRow icon="hourglass" label="Duration" value={booking.estimated_duration_minutes ? `${booking.estimated_duration_minutes} min` : '-'} />
       </View>
 
       {/* Pricing Card */}
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Pricing</Text>
-        <DetailRow icon="pricetag" label="Base Fare" value={`₹${booking.base_fare || 0}`} />
-        {booking.distance_fare > 0 && (
-          <DetailRow icon="speedometer" label="Distance Fare" value={`₹${booking.distance_fare}`} />
+        <DetailRow icon="pricetag" label="Base Fare" value={`₹${parseFloat(booking.base_fare || 0).toLocaleString()}`} />
+        {parseFloat(booking.distance_fare) > 0 && (
+          <DetailRow icon="speedometer" label="Distance Fare" value={`₹${parseFloat(booking.distance_fare).toLocaleString()}`} />
         )}
-        {booking.discount > 0 && (
-          <DetailRow icon="ticket" label="Discount" value={`-₹${booking.discount}`} />
+        {parseFloat(booking.discount) > 0 && (
+          <DetailRow icon="ticket" label="Discount" value={`-₹${parseFloat(booking.discount).toLocaleString()}`} />
         )}
-        {booking.tax > 0 && (
-          <DetailRow icon="receipt" label="Tax" value={`₹${booking.tax}`} />
+        {parseFloat(booking.tax) > 0 && (
+          <DetailRow icon="receipt" label="Tax" value={`₹${parseFloat(booking.tax).toLocaleString()}`} />
         )}
         <View style={styles.totalRow}>
           <Text style={styles.totalLabel}>Total Amount</Text>
-          <Text style={styles.totalValue}>₹{booking.total_amount || 0}</Text>
+          <Text style={styles.totalValue}>₹{parseFloat(booking.total_amount || 0).toLocaleString()}</Text>
         </View>
         <DetailRow icon="card" label="Payment Status" value={booking.payment_status || 'pending'} />
         {booking.coupon_code && (
@@ -207,10 +209,10 @@ export default function BookingDetailScreen({ navigation, route }) {
       </View>
 
       {/* Tracking */}
-      {booking.tracking && booking.tracking.length > 0 && (
+      {tracking.length > 0 && (
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Activity Log</Text>
-          {booking.tracking.map((track, index) => (
+          {tracking.map((track, index) => (
             <View key={index} style={styles.trackItem}>
               <View style={styles.trackDot} />
               <View style={styles.trackInfo}>
