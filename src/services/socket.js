@@ -1,15 +1,69 @@
 /**
  * Polling-based real-time service — replaces Socket.IO for Vercel deployments.
  * Same public API as the old SocketService so admin screens need no changes.
+ * Includes browser notification + sound support for web.
  */
 import { API_BASE_URL } from '../constants/config';
 import { Platform } from 'react-native';
 
 const API_ROOT = API_BASE_URL.endsWith('/api') ? API_BASE_URL : `${API_BASE_URL}/api`;
+const isWeb = Platform.OS === 'web';
 
 let SecureStore;
-if (Platform.OS !== 'web') {
+if (!isWeb) {
   SecureStore = require('expo-secure-store');
+}
+
+/* ── Browser notification helpers ── */
+let notifPermission = isWeb ? (typeof Notification !== 'undefined' ? Notification.permission : 'denied') : 'denied';
+
+function requestNotificationPermission() {
+  if (!isWeb || typeof Notification === 'undefined') return;
+  if (notifPermission === 'default') {
+    Notification.requestPermission().then((p) => { notifPermission = p; });
+  }
+}
+
+function showBrowserNotification(title, body) {
+  if (!isWeb || notifPermission !== 'granted') return;
+  try {
+    const n = new Notification(title, {
+      body,
+      icon: 'https://tours-admin.expo.app/favicon.ico',
+      badge: 'https://tours-admin.expo.app/favicon.ico',
+      tag: 'tours-admin-' + Date.now(),
+      requireInteraction: true,
+    });
+    n.onclick = () => { window.focus(); n.close(); };
+  } catch { /* silent */ }
+}
+
+/* ── Notification sound (web only) ── */
+let _audioCtx = null;
+function playNotificationSound() {
+  if (!isWeb) return;
+  try {
+    // Use AudioContext for a reliable two-tone chime
+    if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = _audioCtx;
+    const now = ctx.currentTime;
+
+    const playTone = (freq, start, duration) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.3, start);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + duration);
+    };
+
+    playTone(880, now, 0.15);        // A5
+    playTone(1174.66, now + 0.18, 0.25); // D6
+  } catch { /* silent */ }
 }
 
 const getToken = async () => {
@@ -46,6 +100,7 @@ class PollingService {
     if (this._connected) return;
     this._connected = true;
     console.log('[Poll] Admin service connected');
+    requestNotificationPermission();
     this._startNotificationPoll();
     this._startBookingPoll();
   }
@@ -102,8 +157,13 @@ class PollingService {
       if (!notifications?.length) return;
       const latest = notifications[0];
       if (latest && latest.id !== this._lastNotifId) {
+        const isFirstLoad = this._lastNotifId === null;
         this._lastNotifId = latest.id;
         this._fire('new_notification', latest);
+        if (!isFirstLoad) {
+          playNotificationSound();
+          showBrowserNotification(latest.title || 'New Notification', latest.body || latest.message || '');
+        }
       }
     } catch {
       // silent
@@ -121,8 +181,16 @@ class PollingService {
       const { bookings } = await apiFetch('/bookings?status=pending&page=1&limit=1');
       const latest = bookings?.[0];
       if (latest && latest.id !== this._lastBookingId) {
+        const isFirstLoad = this._lastBookingId === null;
         this._lastBookingId = latest.id;
         this._fire('new_booking', { booking: latest });
+        if (!isFirstLoad) {
+          playNotificationSound();
+          showBrowserNotification(
+            '🚗 New Booking!',
+            `Booking #${latest.booking_number || ''} — ${latest.pickup_address || ''} → ${latest.drop_address || ''}`,
+          );
+        }
       }
     } catch {
       // silent
